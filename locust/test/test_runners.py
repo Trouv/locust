@@ -452,6 +452,21 @@ class TestMasterRunner(LocustTestCase):
             # print(master.clients['fake_client'].__dict__)
             assert master.clients['fake_client'].state == STATE_MISSING
 
+    def test_master_stops_when_last_worker_quits(self):
+        with mock.patch("locust.rpc.rpc.Server", mocked_rpc()) as server:
+            master = self.get_runner()
+
+            # Connect two fake clients
+            server.mocked_send(Message("client_ready", None, "fake_client1"))
+            server.mocked_send(Message("client_ready", None, "fake_client2"))
+
+            master.start(2, 1)
+            server.mocked_send(Message("client_quit", None, "fake_client2"))
+            self.assertEqual(master.state, STATE_RUNNING)
+
+            server.mocked_send(Message("client_quit", None, "fake_client2"))
+            self.assertEqual(master.state, STATE_STOPPED)
+
     def test_master_total_stats(self):
         with mock.patch("locust.rpc.rpc.Server", mocked_rpc()) as server:
             master = self.get_runner()
