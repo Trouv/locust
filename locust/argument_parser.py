@@ -362,6 +362,13 @@ def setup_parser_arguments(parser):
         help="Optionally specify which Locust classes that should be used (available Locust classes can be listed with -l or --list)",
     )
 
+    locust_classes_group.add_argument(
+        '-m', '--marks',
+        nargs='*',
+        dest='marks',
+        help="Limit the test to only execute tasks with the given marks"
+    )
+
 def get_parser(default_config_files=DEFAULT_CONFIG_FILES):
     # get a parser that is only able to parse the -f argument
     parser = get_empty_argument_parser(add_help=True, default_config_files=default_config_files)

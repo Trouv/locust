@@ -180,6 +180,7 @@ function updateStats() {
         } else {
             appearStopped();
         }
+	console.log(report.state);
 
         setTimeout(updateStats, 2000);
     });

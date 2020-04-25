@@ -13,7 +13,7 @@ import locust
 
 from . import log
 from .argument_parser import parse_locustfile_option, parse_options
-from .core import HttpLocust, Locust
+from .core import HttpLocust, Locust, apply_marks
 from .env import Environment
 from .inspectlocust import get_task_ratio_dict, print_task_ratio
 from .log import setup_logging, greenlet_exception_logger
@@ -139,6 +139,7 @@ def main():
         logger.error("No Locust class found!")
         sys.exit(1)
 
+
     # make sure specified Locust exists
     if options.locust_classes:
         missing = set(options.locust_classes) - set(locusts.keys())
@@ -152,6 +153,11 @@ def main():
         # list() call is needed to consume the dict_view object in Python 3
         locust_classes = list(locusts.values())
     
+    # apply marks to locusts
+    if options.marks:
+        for l in locust_classes:
+            apply_marks(l, options.marks)
+
     # create locust Environment
     environment = create_environment(locust_classes, options, events=locust.events)
     

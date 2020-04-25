@@ -57,7 +57,40 @@ def task(weight=1):
     else:
         return decorator_func
 
+def mark(mark_name='marked'):
 
+    def decorator_func(func):
+        if 'locust_mark_names' not in dir(func):
+            func.locust_mark_names = [mark_name]
+        else:
+            func.locust_mark_names += [mark_name]
+        return func
+
+    if callable(mark_name):
+        func = mark_name
+        mark_name = 'marked'
+        return decorator_func(func)
+    else:
+        return decorator_func
+
+def generate_filter_tasks_by_marks(tasks):
+    def filter_tasks_by_marks(marks=None):
+        if marks is not None:
+            new_tasks = []
+            for task in tasks:
+                if "locust_mark_names" in dir(task):
+                    mark_intersection = [mark for mark in locust_mark_names if mark in marks]
+                    if len(mark_intersection) > 0:
+                        new_tasks.append(task)
+            tasks = new_tasks
+    return filter_tasks_by_marks
+
+def apply_marks(task_holder, marks):
+    if "tasks" in dir(task_holder):
+        task_holder.marks = marks
+        for task in task_holder.__dict__['tasks']:
+            apply_marks(task, marks)
+        
 class NoClientWarningRaiser(object):
     """
     The purpose of this class is to emit a sensible error message for old test scripts that 
@@ -73,9 +106,11 @@ def get_tasks_from_base_classes(bases, class_dict):
     on the TaskSet/Locust class and all its base classes
     """
     new_tasks = []
+    marks = None
     for base in bases:
         if hasattr(base, "tasks") and base.tasks:
             new_tasks += base.tasks
+            marks = base.marks
     
     if "tasks" in class_dict and class_dict["tasks"] is not None:
         tasks = class_dict["tasks"]
@@ -83,19 +118,34 @@ def get_tasks_from_base_classes(bases, class_dict):
             tasks = tasks.items()
         
         for task in tasks:
-            if isinstance(task, tuple):
+            marks_matched = True
+            if "locust_mark_names" in dir(task) and class_dict["marks"] is not None:
+                mark_intersection = [m for m in task.locust_mark_names if m in class_dict["marks"]]
+                marks_matched = len(mark_intersection) > 0
+
+            print(task, marks_matched)
+
+            if isinstance(task, tuple) and marks_matched:
                 task, count = task
                 for i in range(count):
                     new_tasks.append(task)
             else:
                 new_tasks.append(task)
     
+    print(class_dict)
     for item in class_dict.values():
-        if "locust_task_weight" in dir(item):
+        marks_matched = True
+        if "locust_mark_names" in dir(item) and marks is not None:
+            print('making intersection')
+            mark_intersection = [m for m in item.locust_mark_names if m in marks]
+            marks_matched = len(mark_intersection) > 0
+
+        if "locust_task_weight" in dir(item) and marks_matched:
             for i in range(0, item.locust_task_weight):
                 new_tasks.append(item)
+    print(new_tasks)
     
-    return new_tasks
+    return new_tasks, marks
 
 
 class TaskSetMeta(type):
@@ -105,7 +155,7 @@ class TaskSetMeta(type):
     """
     
     def __new__(mcs, classname, bases, class_dict):
-        class_dict["tasks"] = get_tasks_from_base_classes(bases, class_dict)
+        class_dict["tasks"], class_dict["marks"] = get_tasks_from_base_classes(bases, class_dict)
         return type.__new__(mcs, classname, bases, class_dict)
 
 
@@ -142,6 +192,8 @@ class TaskSet(object, metaclass=TaskSetMeta):
         class ForumPage(TaskSet):
             tasks = {ThreadPage:15, write_post:1}
     """
+
+    marks = None
     
     min_wait = None
     """
@@ -344,7 +396,7 @@ class TaskSet(object, metaclass=TaskSetMeta):
         classes further down the hierarchy.
         """
         raise InterruptTaskSet(reschedule)
-    
+
     @property
     def client(self):
         """
@@ -378,7 +430,7 @@ class LocustMeta(type):
     """
     def __new__(mcs, classname, bases, class_dict):
         # gather any tasks that is declared on the class (or it's bases)
-        tasks = get_tasks_from_base_classes(bases, class_dict)   
+        tasks, class_dict["marks"] = get_tasks_from_base_classes(bases, class_dict)   
         class_dict["tasks"] = tasks
         
         if not class_dict.get("abstract"):
@@ -448,6 +500,9 @@ class Locust(object, metaclass=LocustMeta):
         class ForumPage(TaskSet):
             tasks = {ThreadPage:15, write_post:1}
     """
+
+
+    marks = None
 
     weight = 10
     """Probability of locust being chosen. The higher the weight, the greater the chance of it being chosen."""
@@ -536,7 +591,6 @@ class Locust(object, metaclass=LocustMeta):
         elif self._state == LOCUST_STATE_RUNNING:
             self._state = LOCUST_STATE_STOPPING
             return False
-
 
 class HttpLocust(Locust):
     """
